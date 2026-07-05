@@ -186,7 +186,7 @@ def _run_ingestion(tmp_path: str, suffix: str, filename: str) -> None:
         stored = store_chunks(embedded, COLLECTION_NAME, PERSIST_DIR)
 
         _ingestion_status[filename] = "indexed"
-        print(f"[ingestion] {filename}: stored {stored} chunks ✓")
+        print(f"[ingestion] {filename}: stored {stored} chunks (indexed)")
 
     except Exception as e:
         _ingestion_status[filename] = "failed"

@@ -125,20 +125,24 @@ if os.environ.get("HF_SPACE", "").lower() == "true":
         print(f"listing error: {e}")
 
     if _static.exists():
-        # Mount static assets (JS, CSS, images) under /assets
-        # This must come BEFORE the catch-all route
-        _assets = _static / "assets"
+        # Vite SSR builds output to client/ and server/ subdirectories.
+        # Standard builds output index.html directly. Handle both.
+        _client = _static / "client"
+        _serve_dir = _client if _client.exists() else _static
+        print(f"Serving SPA from {_serve_dir}")
+
+        # Mount static assets
+        _assets = _serve_dir / "assets"
         if _assets.exists():
             app.mount("/assets", StaticFiles(directory=str(_assets)), name="assets")
 
-        # Catch-all: serve index.html for every unmatched route so
-        # TanStack Router can handle client-side navigation
+        # Catch-all: always serve index.html for client-side routing
         @app.get("/{full_path:path}")
         async def serve_spa(full_path: str):
-            index = _static / "index.html"
+            index = _serve_dir / "index.html"
             if index.exists():
                 return FileResponse(str(index))
-            return JSONResponse(status_code=404, content={"detail": "Frontend not found"})
+            return JSONResponse(status_code=404, content={"detail": f"Frontend not found at {index}"})
     else:
         print("WARNING: static folder not found — frontend will not be served")
 
