@@ -11,7 +11,7 @@ a record of *why* each decision was made, so it can double as interview prep lat
 React frontend (workspace.tsx)
     ↓  HTTP + X-API-Key header
 FastAPI backend (main.py)
-    ├── Auth middleware        — X-API-Key checked on every request
+    ├── Auth middleware        — X-API-Key checked on protected routes in api_key mode
     ├── Rate limiter           — slowapi, per-endpoint per-IP limits
     ↓
 Document ingestion pipeline
@@ -263,11 +263,22 @@ returned a useful confidence signal alongside the generation failure.
 
 ### Security layer (`main.py`)
 
-**API key authentication (middleware):** every request must carry `X-API-Key`
-matching `DOCMIND_API_KEY` from `.env`. Implemented as middleware rather than
-a `Depends()` — middleware runs unconditionally on every request, so new routes
-are protected automatically without remembering to add a dependency.
-`/health`, `/docs`, `/openapi.json`, `/redoc` are exempt.
+**API key authentication (middleware):** authentication is explicit through
+`AUTH_MODE`.
+
+- `AUTH_MODE=api_key`: document and query routes require `X-API-Key` matching
+  `DOCMIND_API_KEY`. Missing server-side key configuration fails startup.
+- `AUTH_MODE=disabled`: all API routes are unprotected and startup prints a
+  warning. Use only for local development, controlled demos, or deployments
+  protected externally.
+
+Public health routes are `/health`, `/health/live`, and `/health/ready`. API
+docs are controlled by `API_DOCS_ENABLED`; they are enabled by default outside
+production and disabled by default in production.
+
+This API key is not real multi-user authentication. If the key is exposed via
+`VITE_DOCMIND_API_KEY`, it is visible in browser JavaScript and is suitable only
+for controlled deployments or basic abuse reduction.
 
 **Rate limiting (slowapi):** `SlowAPIMiddleware` registered at app level.
 Per-endpoint limits via `@limiter.limit()` decorators:
@@ -282,7 +293,7 @@ startup where it belongs.
 
 | Condition | HTTP status | Notes |
 |---|---|---|
-| Wrong/missing API key | 401 | Before any router logic |
+| Wrong/missing API key | 401 | Before any protected router logic |
 | Rate limit exceeded | 429 | Automatic via slowapi |
 | Unsupported file type (extension) | 415 | Before reading bytes |
 | File too large | 413 | After read, before pipeline |
@@ -344,10 +355,9 @@ an interactive chat assistant on the right.
 
 ### API integration decisions
 
-**Auth headers on every call:** `X-API-Key` added to all 7 backend call sites.
-`AUTH_HEADERS` constant defined once, spread into `fetch()` options. XHR upload
-uses `xhr.setRequestHeader()` separately — `Content-Type` is deliberately NOT
-set on FormData XHR so the browser sets it with the correct multipart boundary.
+**Auth headers:** the frontend API client adds `X-API-Key` from
+`VITE_DOCMIND_API_KEY` when configured. The value is browser-visible and is not
+secure end-user authentication.
 
 **`crypto.randomUUID()` replaced with `genId()`** — requires HTTPS; fails on
 plain `http://` in some browsers during local development.
@@ -415,7 +425,7 @@ paths for Linux, CORS tightened to actual frontend domain).*
 | File size limit | 25 MB, checked after read | Content-Length is client-controlled; `len(contents)` is reliable |
 | Magic byte validation | Inline, no library | No `libmagic` system dependency; PDF/DOCX/TXT headers are stable and simple |
 | Filename sanitisation | `Path().name` + regex strip | Strips traversal and shell metacharacters before use as DB key |
-| API key auth | HTTP middleware | Middleware protects all routes automatically; `Depends()` requires per-endpoint decoration |
+| API key auth | HTTP middleware | Middleware protects document/query routes in `api_key` mode; health routes remain public |
 | Rate limiting | slowapi, per-endpoint | Per-endpoint lets upload (10/min) and query (20/min) have different budgets |
 | Upload rate limit | 10/minute | Prevents disk-fill loops |
 | Query rate limit | 20/minute | Protects Gemini free-tier quota |

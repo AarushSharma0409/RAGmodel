@@ -28,7 +28,7 @@ Most RAG demos answer questions and stop there. DocMind is built around four thi
 ┌─────────────────────────────────────────────────────────────────┐
 │                        React Frontend                           │
 │    Upload zone · Chat UI · Citations · Confidence badges        │
-│    X-API-Key header on every backend call                       │
+│    Optional X-API-Key header for protected backend calls         │
 └────────────────────────────┬────────────────────────────────────┘
                              │ HTTP
 ┌────────────────────────────▼────────────────────────────────────┐
@@ -126,8 +126,9 @@ cd DocMind/backend
 
 pip install -r requirements.txt
 
-# Create .env — both keys required
+# Create .env
 echo "GEMINI_API_KEY=your_gemini_key" > .env
+echo "AUTH_MODE=api_key" >> .env
 echo "DOCMIND_API_KEY=$(python -c 'import secrets; print(secrets.token_hex(32))')" >> .env
 
 uvicorn app.api.main:app --reload
@@ -142,8 +143,9 @@ cd DocMind/frontend
 
 npm install
 
-# Create .env.local — must match DOCMIND_API_KEY in backend/.env
-echo "VITE_DOCMIND_API_KEY=your_same_api_key" > .env.local
+# Create .env.local
+echo "VITE_API_BASE_URL=http://127.0.0.1:8000" > .env.local
+echo "VITE_DOCMIND_API_KEY=your_same_demo_api_key" >> .env.local
 
 npm run dev
 # → http://localhost:5173
@@ -165,10 +167,16 @@ python -m pytest tests/ -v
 
 ## API reference
 
-All endpoints (except `/health`) require the header:
+With `AUTH_MODE=api_key`, document and query endpoints require:
 ```
 X-API-Key: your_api_key
 ```
+
+Public routes are `/health`, `/health/live`, and `/health/ready`. API docs are
+enabled by default outside production and disabled by default in production.
+
+`AUTH_MODE=disabled` is only for local development, controlled demos, or
+deployments protected externally. In that mode all API routes are unprotected.
 
 ### `POST /documents/upload`
 
@@ -231,13 +239,18 @@ Per-file ingestion status. Poll this to detect failures.
 
 | Layer | Implementation |
 |---|---|
-| Authentication | `X-API-Key` middleware — all endpoints, automatic on new routes |
+| Authentication | Explicit `AUTH_MODE`: `api_key` requires `X-API-Key`; `disabled` leaves API routes unprotected |
 | Rate limiting | `slowapi` — 10/min upload, 20/min query, per IP |
 | File size | 25 MB limit checked after read (`Content-Length` is client-controlled) |
 | Magic bytes | PDF (`%PDF`), DOCX (`PK\x03\x04`), TXT (UTF-8 decodable) — checked before pipeline |
 | Filename | `Path().name` strips traversal, regex strips shell metacharacters |
 | Secrets | `.env` and `chroma_store/` in `.gitignore` — never committed |
-| CORS | `*` in development — tighten to frontend domain at deployment |
+| CORS | Configured with `CORS_ORIGINS`; `X-API-Key` is allowed, but CORS is not authentication |
+
+Browser note: `VITE_DOCMIND_API_KEY` is bundled into frontend JavaScript and is
+visible to users. It is suitable only for personal deployments, internal demos,
+or basic abuse reduction. DocMind is still single-workspace until user/workspace
+isolation is implemented later.
 
 ---
 

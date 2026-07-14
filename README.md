@@ -14,3 +14,7 @@ Multi-document RAG system with citations, confidence signaling, and query routin
 Upload PDF, DOCX, or TXT files and ask questions across all of them. Every answer cites the exact source document and page.
 
 > **Note:** This demo runs on Hugging Face Spaces free tier with in-memory ChromaDB storage. Uploaded documents are cleared on Space restart. The persistent storage architecture is the default for local deployment — see the [main repo](https://github.com/AarushSharma0409/DocMind) for full details.
+
+Authentication is controlled by `AUTH_MODE`. `api_key` mode requires `X-API-Key`
+on document and query routes. `disabled` mode is only for local or externally
+protected demos; it is not secure multi-user authentication.

@@ -8,6 +8,14 @@ import type {
 // Read from .env rather than hardcoding, so switching environments (local
 // dev vs. a deployed backend in Phase 5) doesn't require touching source.
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
+const API_KEY = import.meta.env.VITE_DOCMIND_API_KEY?.trim();
+
+function buildHeaders(extra?: HeadersInit): HeadersInit {
+  return {
+    ...(extra ?? {}),
+    ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
+  };
+}
 
 // A dedicated error class, not a plain thrown string. query.py's design
 // deliberately preserves confidence through a generation failure (assess
@@ -27,7 +35,7 @@ export class QueryError extends Error {
 export async function queryDocuments(query: string): Promise<QueryResponse> {
   const res = await fetch(`${API_BASE_URL}/query/`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: buildHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ query }),
   });
 
@@ -55,6 +63,7 @@ export async function uploadDocument(file: File): Promise<UploadResponse> {
 
   const res = await fetch(`${API_BASE_URL}/documents/upload`, {
     method: "POST",
+    headers: buildHeaders(),
     body: formData,
   });
 
@@ -67,7 +76,9 @@ export async function uploadDocument(file: File): Promise<UploadResponse> {
 }
 
 export async function listDocuments(): Promise<DocumentListResponse> {
-  const res = await fetch(`${API_BASE_URL}/documents/`);
+  const res = await fetch(`${API_BASE_URL}/documents/`, {
+    headers: buildHeaders(),
+  });
 
   if (!res.ok) {
     const body = await res.json().catch(() => null);

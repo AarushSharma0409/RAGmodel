@@ -91,6 +91,7 @@ class Settings:
     app_env: str
     debug: bool
     auth_mode: str
+    api_docs_enabled: bool
     docmind_api_key: str | None = field(default=None, repr=False)
     chroma_persist_dir: Path = BACKEND_DIR / "chroma_store"
     chroma_collection_name: str = "docmind_chunks"
@@ -126,6 +127,7 @@ class Settings:
             f"app_env={self.app_env!r}, "
             f"debug={self.debug!r}, "
             f"auth_mode={self.auth_mode!r}, "
+            f"api_docs_enabled={self.api_docs_enabled!r}, "
             f"has_docmind_api_key={self.has_docmind_api_key!r}, "
             f"chroma_persist_dir={str(self.chroma_persist_dir)!r}, "
             f"chroma_collection_name={self.chroma_collection_name!r}, "
@@ -149,7 +151,8 @@ def build_settings(
 
     env = os.environ if environ is None else environ
     app_env = _get(env, "APP_ENV", "local").lower()
-    auth_mode = _get(env, "AUTH_MODE", "api_key").lower()
+    auth_mode_default = "api_key" if app_env == "production" else "disabled"
+    auth_mode = _get(env, "AUTH_MODE", auth_mode_default).lower()
     if auth_mode not in SUPPORTED_AUTH_MODES:
         raise ConfigError(f"AUTH_MODE must be one of: {', '.join(sorted(SUPPORTED_AUTH_MODES))}.")
 
@@ -181,13 +184,15 @@ def build_settings(
     )
 
     docmind_api_key = _get(env, "DOCMIND_API_KEY") or None
-    if app_env == "production" and auth_mode == "api_key" and not docmind_api_key:
-        raise ConfigError("DOCMIND_API_KEY is required when APP_ENV=production and AUTH_MODE=api_key.")
+    if auth_mode == "api_key" and not docmind_api_key:
+        raise ConfigError("DOCMIND_API_KEY is required when AUTH_MODE=api_key.")
+    api_docs_default = "false" if app_env == "production" else "true"
 
     return Settings(
         app_env=app_env,
         debug=_parse_bool(_get(env, "DEBUG", "false"), name="DEBUG"),
         auth_mode=auth_mode,
+        api_docs_enabled=_parse_bool(_get(env, "API_DOCS_ENABLED", api_docs_default), name="API_DOCS_ENABLED"),
         docmind_api_key=docmind_api_key,
         chroma_persist_dir=_parse_path(
             _get(env, "CHROMA_PERSIST_DIR"),

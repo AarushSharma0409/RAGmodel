@@ -11,7 +11,8 @@ def test_default_values_load_correctly():
 
     assert settings.app_env == "local"
     assert settings.debug is False
-    assert settings.auth_mode == "api_key"
+    assert settings.auth_mode == "disabled"
+    assert settings.api_docs_enabled is True
     assert settings.chroma_persist_dir == (BACKEND_DIR / "chroma_store").resolve()
     assert settings.chroma_collection_name == "docmind_chunks"
     assert settings.max_upload_bytes == 25 * 1024 * 1024
@@ -24,6 +25,7 @@ def test_environment_variables_override_defaults(tmp_path):
         "APP_ENV": "staging",
         "DEBUG": "true",
         "AUTH_MODE": "disabled",
+        "API_DOCS_ENABLED": "false",
         "DOCMIND_API_KEY": "demo-secret",
         "CHROMA_PERSIST_DIR": str(tmp_path / "vectors"),
         "CHROMA_COLLECTION_NAME": "custom_chunks",
@@ -48,6 +50,7 @@ def test_environment_variables_override_defaults(tmp_path):
     assert settings.app_env == "staging"
     assert settings.debug is True
     assert settings.auth_mode == "disabled"
+    assert settings.api_docs_enabled is False
     assert settings.docmind_api_key == "demo-secret"
     assert settings.chroma_collection_name == "custom_chunks"
     assert settings.allowed_file_types == frozenset({".pdf", ".txt"})
@@ -138,9 +141,25 @@ def test_missing_optional_secrets_do_not_crash_local_configuration():
     assert settings.has_llm_api_key is False
 
 
-def test_production_api_key_mode_requires_api_key():
+def test_api_key_mode_requires_api_key():
     with pytest.raises(ConfigError):
-        build_settings({"APP_ENV": "production", "AUTH_MODE": "api_key"}, load_env_file=False)
+        build_settings({"AUTH_MODE": "api_key"}, load_env_file=False)
+
+
+def test_blank_api_key_in_api_key_mode_is_rejected():
+    with pytest.raises(ConfigError):
+        build_settings({"AUTH_MODE": "api_key", "DOCMIND_API_KEY": "   "}, load_env_file=False)
+
+
+def test_production_without_explicit_auth_mode_fails_safe():
+    with pytest.raises(ConfigError):
+        build_settings({"APP_ENV": "production"}, load_env_file=False)
+
+
+def test_production_docs_disabled_by_default_when_auth_disabled():
+    settings = build_settings({"APP_ENV": "production", "AUTH_MODE": "disabled"}, load_env_file=False)
+
+    assert settings.api_docs_enabled is False
 
 
 def test_configuration_works_when_cwd_changes(tmp_path, monkeypatch):

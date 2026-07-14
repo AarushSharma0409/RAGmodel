@@ -12,6 +12,7 @@ importing it from routers would create a circular dependency
 """
 
 from contextlib import asynccontextmanager
+from secrets import compare_digest
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,20 +28,20 @@ from app.ingestion.embedder import get_model
 
 # ── API key auth ──────────────────────────────────────────────────────────────
 DOCMIND_API_KEY = settings.docmind_api_key or ""
-# Static frontend routes and API docs are exempt from auth.
-# All /api/ routes still require X-API-Key.
-_AUTH_EXEMPT = {"/health", "/docs", "/openapi.json", "/redoc"}
+_PUBLIC_EXACT_PATHS = {"/health", "/health/live", "/health/ready"}
+if settings.api_docs_enabled:
+    _PUBLIC_EXACT_PATHS.update({"/docs", "/openapi.json", "/redoc"})
 
 def _is_exempt(path: str) -> bool:
-    """Exempt static frontend assets and known open API paths."""
-    if path in _AUTH_EXEMPT:
+    """Return whether a request path is intentionally public."""
+    if path in _PUBLIC_EXACT_PATHS:
         return True
-    # Allow all static asset requests (JS, CSS, images, fonts)
-    static_exts = (".js", ".css", ".png", ".ico", ".svg", ".woff", ".woff2", ".html", ".json")
-    if any(path.endswith(ext) for ext in static_exts):
-        return True
+    if settings.hf_space:
+        static_exts = (".js", ".css", ".png", ".ico", ".svg", ".woff", ".woff2", ".html", ".json")
+        if any(path.endswith(ext) for ext in static_exts):
+            return True
     # Allow root — serves index.html
-    if path == "/" or path == "":
+    if settings.hf_space and (path == "/" or path == ""):
         return True
     return False
 
@@ -52,12 +53,14 @@ async def lifespan(app: FastAPI):
         f"env={settings.app_env}, auth_mode={settings.auth_mode}, "
         f"chroma_dir={settings.chroma_persist_dir}, "
         f"collection={settings.chroma_collection_name}, "
-        f"llm_key_configured={settings.has_llm_api_key}"
+        f"llm_key_configured={settings.has_llm_api_key}, "
+        f"api_key_configured={settings.has_docmind_api_key}, "
+        f"api_docs_enabled={settings.api_docs_enabled}"
     )
-    if settings.auth_mode == "disabled" or not DOCMIND_API_KEY:
-        print("WARNING: DOCMIND_API_KEY is not set — endpoints are unprotected")
+    if settings.auth_mode == "disabled":
+        print("WARNING: API authentication is disabled. All API routes are unprotected.")
     else:
-        print(f"API key auth enabled (key length: {len(DOCMIND_API_KEY)} chars)")
+        print("API key authentication enabled")
 
     print("Loading embedding model...")
     get_model()
@@ -72,6 +75,9 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
     debug=settings.debug,
+    docs_url="/docs" if settings.api_docs_enabled else None,
+    redoc_url="/redoc" if settings.api_docs_enabled else None,
+    openapi_url="/openapi.json" if settings.api_docs_enabled else None,
 )
 
 # Rate limiter
@@ -83,9 +89,9 @@ app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=list(settings.cors_origins),
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials="*" not in settings.cors_origins,
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-API-Key"],
 )
 
 
@@ -100,13 +106,14 @@ async def require_api_key(request: Request, call_next):
 
     if _is_exempt(request.url.path):
         return await call_next(request)
-    if settings.auth_mode == "disabled" or not DOCMIND_API_KEY:
+    if settings.auth_mode == "disabled":
         return await call_next(request)
     provided_key = request.headers.get("X-API-Key", "").strip()
-    if provided_key != DOCMIND_API_KEY:
+    if not provided_key or not compare_digest(provided_key, DOCMIND_API_KEY):
         return JSONResponse(
             status_code=401,
-            content={"detail": "Invalid or missing API key. Set X-API-Key header."},
+            content={"detail": "Invalid or missing API key"},
+            headers={"WWW-Authenticate": "ApiKey"},
         )
     return await call_next(request)
 
@@ -160,4 +167,16 @@ if settings.hf_space:
 @app.get("/health")
 def health_check():
     """Liveness check — no auth required."""
+    return {"status": "ok"}
+
+
+@app.get("/health/live")
+def liveness_check():
+    """Liveness check - no auth required."""
+    return {"status": "ok"}
+
+
+@app.get("/health/ready")
+def readiness_check():
+    """Readiness check - no auth required."""
     return {"status": "ok"}
