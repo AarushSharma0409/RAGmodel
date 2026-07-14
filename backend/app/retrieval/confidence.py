@@ -13,11 +13,6 @@ WHY THIS EXISTS AS A SEPARATE MODULE:
   whether generation succeeded or failed.
 """
 
-from pathlib import Path
-from dotenv import load_dotenv
-
-load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
-
 # Thresholds are named constants so tuning them later means one change,
 # not hunting through if-statements. These starting values are hypotheses —
 # the right numbers come from observing real queries on real documents.

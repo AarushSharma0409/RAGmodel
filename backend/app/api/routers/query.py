@@ -19,20 +19,16 @@ even when generation failed — it explains why. Assessing confidence
 first means that signal is never lost to a downstream failure.
 """
 
-import os
-from pathlib import Path
-
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
 
 from app.api.limiter import limiter
+from app.core.config import settings
 
 from app.retrieval.query_router import route_query
 from app.retrieval.retriever import (
     retrieve,
     retrieve_document,
-    DEFAULT_COLLECTION_NAME,
-    DEFAULT_PERSIST_DIR,
 )
 from app.retrieval.generator import generate, GenerationError, ANSWER_MODE_QA, ANSWER_MODE_SUMMARY
 from app.retrieval.confidence import assess_confidence
@@ -43,11 +39,8 @@ router = APIRouter(prefix="/query", tags=["query"])
 # Must match documents.py — same store, same collection.
 # PERSIST_DIR: use CHROMA_PERSIST_DIR env var if set (Railway volume mount),
 # otherwise fall back to chroma_store/ relative to the repo root (local dev).
-PERSIST_DIR = os.environ.get(
-    "CHROMA_PERSIST_DIR",
-    str(Path(__file__).resolve().parent.parent.parent.parent / "chroma_store"),
-)
-COLLECTION_NAME = DEFAULT_COLLECTION_NAME
+PERSIST_DIR = str(settings.chroma_persist_dir)
+COLLECTION_NAME = settings.chroma_collection_name
 
 
 class QueryRequest(BaseModel):

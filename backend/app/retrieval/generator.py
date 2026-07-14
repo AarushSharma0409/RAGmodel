@@ -69,31 +69,18 @@ OUTPUT SHAPE:
 }
 """
 
-from pathlib import Path
-
-from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-# Load backend/.env regardless of which directory this script is run
-# from. load_dotenv() with no arguments searches upward from the
-# CURRENT WORKING DIRECTORY, which is unreliable - e.g. running this
-# file directly from backend/app/retrieval/ vs. running it as
-# `python -m app.retrieval.generator` from backend/ are two different
-# working directories, and the bare load_dotenv() call found .env in
-# one case but not the other. Resolving the path explicitly, relative
-# to THIS FILE's location (not the working directory), makes loading
-# .env work the same way no matter how the script is invoked.
-_ENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
-load_dotenv(dotenv_path=_ENV_PATH)
+from app.core.config import settings
 
-GENERATION_MODEL = "gemini-2.5-flash"
+GENERATION_MODEL = settings.llm_model_name
 ANSWER_MODE_QA = "qa"
 ANSWER_MODE_SUMMARY = "summary"
 VALID_ANSWER_MODES = (ANSWER_MODE_QA, ANSWER_MODE_SUMMARY)
-MAX_CHUNKS_IN_PROMPT = 5  # matches retriever.py's DEFAULT_TOP_K - kept as
+MAX_CHUNKS_IN_PROMPT = settings.retrieval_top_k  # matches retriever.py's DEFAULT_TOP_K - kept as
                            # one source of truth, see note in generate()
-MAX_SUMMARY_CHUNKS_IN_PROMPT = 25
+MAX_SUMMARY_CHUNKS_IN_PROMPT = settings.full_document_max_chunks
 
 GENERATION_RESPONSE_SCHEMA = {
     "type": "object",

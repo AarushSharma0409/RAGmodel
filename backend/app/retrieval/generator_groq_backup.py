@@ -57,16 +57,15 @@ the model to only cite chunk IDs we explicitly pass in the prompt, which
 prevents hallucinated sources.
 """
 
-import os
 import json
 from groq import Groq
-from dotenv import load_dotenv
+
+from app.core.config import settings
 
 DEFAULT_MODEL = "llama-3.1-8b-instant"
 MAX_CHUNKS_IN_PROMPT = 5
 
-load_dotenv(os.path.join(os.path.dirname(__file__), "../../.env"))
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_API_KEY = settings.groq_api_key
 
 
 def _build_prompt(query: str, chunks: list[dict]) -> str:
@@ -134,7 +133,7 @@ def generate(query: str, chunks: list[dict], model_name: str = DEFAULT_MODEL,
     if not chunks:
         raise ValueError("At least one chunk must be provided for generation.")
 
-    resolved_key = api_key or GROQ_API_KEY or os.environ.get("GROQ_API_KEY")
+    resolved_key = api_key or GROQ_API_KEY
     if not resolved_key:
         raise EnvironmentError(
             "Groq API key not set. Set the GROQ_API_KEY environment variable "

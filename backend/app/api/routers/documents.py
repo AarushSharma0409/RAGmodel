@@ -58,22 +58,19 @@ from app.storage.vector_store import (
     delete_by_source_file,
     delete_all_chunks,
     get_collection,
-    DEFAULT_COLLECTION_NAME,
 )
 from app.api.limiter import limiter
+from app.core.config import settings
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
-SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".txt"}
-MAX_UPLOAD_BYTES = 25 * 1024 * 1024  # 25 MB
+SUPPORTED_EXTENSIONS = settings.allowed_file_types
+MAX_UPLOAD_BYTES = settings.max_upload_bytes
 
 # PERSIST_DIR: use CHROMA_PERSIST_DIR env var if set (Railway volume mount),
 # otherwise fall back to chroma_store/ relative to the repo root (local dev).
-PERSIST_DIR = os.environ.get(
-    "CHROMA_PERSIST_DIR",
-    str(Path(__file__).resolve().parent.parent.parent.parent / "chroma_store"),
-)
-COLLECTION_NAME = DEFAULT_COLLECTION_NAME
+PERSIST_DIR = str(settings.chroma_persist_dir)
+COLLECTION_NAME = settings.chroma_collection_name
 
 # Characters safe in a ChromaDB metadata value and in log output.
 _SAFE_FILENAME_RE = re.compile(r"[^\w\s\-.]")

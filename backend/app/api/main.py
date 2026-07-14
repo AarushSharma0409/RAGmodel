@@ -11,11 +11,8 @@ importing it from routers would create a circular dependency
 (main → routers → main). limiter.py has no such dependencies.
 """
 
-import os
 from contextlib import asynccontextmanager
-from pathlib import Path
 
-from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -25,13 +22,11 @@ from slowapi.middleware import SlowAPIMiddleware
 
 from app.api.limiter import limiter
 from app.api.routers import documents, query
+from app.core.config import settings
 from app.ingestion.embedder import get_model
 
-# Load .env relative to this file — working-directory-independent
-load_dotenv(dotenv_path=Path(__file__).resolve().parent.parent.parent / ".env")
-
 # ── API key auth ──────────────────────────────────────────────────────────────
-DOCMIND_API_KEY = os.environ.get("DOCMIND_API_KEY", "").strip()
+DOCMIND_API_KEY = settings.docmind_api_key or ""
 # Static frontend routes and API docs are exempt from auth.
 # All /api/ routes still require X-API-Key.
 _AUTH_EXEMPT = {"/health", "/docs", "/openapi.json", "/redoc"}
@@ -52,7 +47,14 @@ def _is_exempt(path: str) -> bool:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if not DOCMIND_API_KEY:
+    print(
+        "Config loaded: "
+        f"env={settings.app_env}, auth_mode={settings.auth_mode}, "
+        f"chroma_dir={settings.chroma_persist_dir}, "
+        f"collection={settings.chroma_collection_name}, "
+        f"llm_key_configured={settings.has_llm_api_key}"
+    )
+    if settings.auth_mode == "disabled" or not DOCMIND_API_KEY:
         print("WARNING: DOCMIND_API_KEY is not set — endpoints are unprotected")
     else:
         print(f"API key auth enabled (key length: {len(DOCMIND_API_KEY)} chars)")
@@ -69,6 +71,7 @@ app = FastAPI(
     description="Multi-document RAG system with citations and confidence signaling.",
     version="0.1.0",
     lifespan=lifespan,
+    debug=settings.debug,
 )
 
 # Rate limiter
@@ -79,7 +82,7 @@ app.add_middleware(SlowAPIMiddleware)
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=list(settings.cors_origins),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -88,9 +91,16 @@ app.add_middleware(
 
 @app.middleware("http")
 async def require_api_key(request: Request, call_next):
+    # Always allow CORS preflight requests through — the browser sends
+    # OPTIONS before every cross-origin request. If we reject OPTIONS with
+    # 401, the CORS middleware never gets to add the Allow-Origin header,
+    # and the real request fails with a CORS error instead of a 401.
+    if request.method == "OPTIONS":
+        return await call_next(request)
+
     if _is_exempt(request.url.path):
         return await call_next(request)
-    if not DOCMIND_API_KEY:
+    if settings.auth_mode == "disabled" or not DOCMIND_API_KEY:
         return await call_next(request)
     provided_key = request.headers.get("X-API-Key", "").strip()
     if provided_key != DOCMIND_API_KEY:
@@ -108,11 +118,11 @@ app.include_router(query.router)
 # On HF Spaces, serve the built React frontend as static files.
 # The Dockerfile copies frontend/dist into backend/static, so the
 # static folder sits alongside the app/ package inside /home/appuser/backend.
-if os.environ.get("HF_SPACE", "").lower() == "true":
+if settings.hf_space:
     from fastapi.staticfiles import StaticFiles
     from fastapi.responses import FileResponse
 
-    _static = Path("/home/appuser/backend/static")
+    _static = settings.hf_static_dir
     print(f"Serving frontend from {_static} (exists={_static.exists()})")
     # Debug: list contents so we can see what's actually there
     try:

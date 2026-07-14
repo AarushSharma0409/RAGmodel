@@ -48,8 +48,10 @@ corrupt retrieval quality without any visible symptom.
 
 from sentence_transformers import SentenceTransformer
 
-MODEL_NAME = "all-MiniLM-L6-v2"
-EMBEDDING_DIMENSION = 384  # fixed by the model choice above
+from app.core.config import settings
+
+MODEL_NAME = settings.embedding_model_name
+EMBEDDING_DIMENSION = settings.embedding_dimension  # fixed by the model choice above
 
 _model = None  # lazy-loaded singleton, see get_model()
 

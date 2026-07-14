@@ -56,10 +56,11 @@ this module's 1 - distance conversion valid again.
 """
 
 from app.ingestion.embedder import get_model
+from app.core.config import settings
 from app.storage.vector_store import get_collection, DEFAULT_COLLECTION_NAME, DEFAULT_PERSIST_DIR
 
-DEFAULT_TOP_K = 5
-DEFAULT_FULL_DOCUMENT_MAX_CHUNKS = 25
+DEFAULT_TOP_K = settings.retrieval_top_k
+DEFAULT_FULL_DOCUMENT_MAX_CHUNKS = settings.full_document_max_chunks
 
 
 def retrieve(query: str,

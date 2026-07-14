@@ -51,24 +51,12 @@ to answer the question, which is better than the whole query failing
 over a routing-layer issue.
 """
 
-from pathlib import Path
-
-from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 
-# Load backend/.env regardless of which directory this script is run
-# from. A bare load_dotenv() searches upward from the CURRENT WORKING
-# DIRECTORY, which is unreliable - this exact issue was found while
-# testing generator.py (worked when run as a module from backend/, but
-# failed when run directly from a subdirectory). Resolving the path
-# explicitly relative to THIS FILE's location, rather than the working
-# directory, makes .env loading work the same way no matter how the
-# script is invoked.
-_ENV_PATH = Path(__file__).resolve().parent.parent.parent / ".env"
-load_dotenv(dotenv_path=_ENV_PATH)
+from app.core.config import settings
 
-ROUTER_MODEL = "gemini-2.5-flash"
+ROUTER_MODEL = settings.llm_model_name
 
 VALID_ROUTES = ("retrieve", "full_document", "no_retrieval")
 DEFAULT_FALLBACK_ROUTE = "retrieve"

@@ -39,10 +39,10 @@ compatibility, this module explicitly converts None to the string
 or causes a storage error at write time.
 """
 
-import os
-
 import chromadb
 from chromadb.config import Settings
+
+from app.core.config import settings
 
 # HF_SPACE=true means we're running on Hugging Face Spaces, which has no
 # persistent disk on the free tier. In that case we use an in-memory client
@@ -50,10 +50,10 @@ from chromadb.config import Settings
 # code, and all other behaviour are identical to the persistent version.
 # The persistent client remains the default for local development and any
 # platform that provides a disk volume.
-_USE_MEMORY = os.environ.get("HF_SPACE", "").lower() == "true"
+_USE_MEMORY = settings.hf_space
 
-DEFAULT_PERSIST_DIR = "./data/chroma"
-DEFAULT_COLLECTION_NAME = "docmind_chunks"
+DEFAULT_PERSIST_DIR = str(settings.chroma_persist_dir)
+DEFAULT_COLLECTION_NAME = settings.chroma_collection_name
 
 # Cache of clients keyed by persist_dir, NOT a single global singleton.
 #
